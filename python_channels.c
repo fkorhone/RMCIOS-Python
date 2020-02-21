@@ -165,7 +165,7 @@ void python_channel (struct python_channel_data *this,
            if(PyFloat_Check(ret))
            {
                float x = PyFloat_AsDouble(ret);
-               return_int(context, returnv, x);
+               return_float(context, returnv, x);
            }
            else if (PyLong_Check(ret))
            {
