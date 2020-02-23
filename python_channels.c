@@ -112,8 +112,9 @@ PyObject * call_rmcios_as_python(const struct context_rmcios *context, PyObject 
     PyTuple_SetItem(pArgs, 4, pParams);            // params
    
     // Call function:
-    PyObject_CallObject(function, pArgs);
+    pValue = PyObject_CallObject(function, pArgs);
     Py_DECREF(pArgs);
+    return pValue;
 }
 
 void python_channel (struct python_channel_data *this,
@@ -172,6 +173,13 @@ void python_channel (struct python_channel_data *this,
                int x = PyLong_AsLong(ret);
                return_int(context, returnv, x);
            }
+           else{
+                printf("Unknown type\n");
+           }
+        }
+        else
+        {
+           printf("not ret value");
         }
     }
     else
