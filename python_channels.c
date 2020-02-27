@@ -207,6 +207,10 @@ void python_module (PyObject *pModule,
                     struct combo_rmcios *returnv,
                     int num_params, const union param_rmcios param)
 {
+   // Ensure calls from threads use GILState properly
+   PyGILState_STATE gstate;
+   gstate = PyGILState_Ensure();
+   
    switch (function)
    {
       case help_rmcios:
@@ -218,10 +222,6 @@ void python_module (PyObject *pModule,
             printf("create");
          if (num_params < 2) break;
     
-         if (Py_IsInitialized() == 0)
-         {
-            Py_Initialize();
-         }
          int blen = param_string_alloc_size(context, paramtype, param, 1);       
          {
             char buffer[blen];
@@ -231,6 +231,8 @@ void python_module (PyObject *pModule,
             pName = PyUnicode_DecodeFSDefault(module_name);
             if(!pName) info (context, context->report, "NULL decode");
             pModule = PyImport_Import(pName);
+            Py_DECREF(pName);
+            
             if(!pModule) printf("could not import module: %s\n", module_name);
             create_channel_param (context, paramtype, param, 0, 
                                   (class_rmcios)python_module, pModule);
@@ -261,12 +263,17 @@ void python_module (PyObject *pModule,
          }
          break;
    }
+   /* Release the thread. No Python API allowed beyond this point. */
+   PyGILState_Release(gstate);
 }
 
 void create_python_channel(const struct context_rmcios *context, PyObject *pModule, const char *class_name)
 {
+      // Ensure calls from threads use GILState properly
+   PyGILState_STATE gstate;
+   gstate = PyGILState_Ensure();
+
     struct python_channel_data *this;    
-    PyObject * pName;
     this = allocate_storage (context, sizeof (struct python_channel_data), 0);  
     this->pModule=pModule;
     if (this->pModule) {
@@ -290,6 +297,9 @@ void create_python_channel(const struct context_rmcios *context, PyObject *pModu
     }
 
     create_channel_str (context, class_name, (class_rmcios) python_channel, this);
+
+   /* Release the thread. No Python API allowed beyond this point. */
+   PyGILState_Release(gstate);
 }
 
 #ifdef INDEPENDENT_CHANNEL_MODULE
@@ -298,6 +308,8 @@ void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
    info (context, context->report,
          "python channels module\r\n[" VERSION_STR "]\r\n");
+
+    Py_Initialize();
     create_channel_str (context, "pymodule", (class_rmcios)python_module, 0);
 }
 #endif
