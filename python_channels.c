@@ -108,12 +108,13 @@ PyObject * call_rmcios_as_python(const struct context_rmcios *context, PyObject 
     PyTuple_SetItem(pArgs, 0, PyLong_FromLong(0)); // self
     PyTuple_SetItem(pArgs, 1, PyLong_FromLong(0)); // context
     PyTuple_SetItem(pArgs, 2, PyLong_FromLong(0)); // id
-    PyTuple_SetItem(pArgs, 3, PyLong_FromLong(0)); // returnv
-    PyTuple_SetItem(pArgs, 4, pParams);            // params
+    PyTuple_SetItem(pArgs, 3, pParams);            // params
    
     // Call function:
+    printf("calling");
     pValue = PyObject_CallObject(function, pArgs);
     Py_DECREF(pArgs);
+    if(pValue == 0) printf("failed call!\n");
     return pValue;
 }
 
@@ -161,7 +162,7 @@ void python_channel (struct python_channel_data *this,
                               callFunc, 
                               paramtype, returnv,
                               num_params, param);
-        if(ret && ret != Py_BuildValue(""))
+        if(ret)// && ret != Py_BuildValue(""))
         {
            if(PyFloat_Check(ret))
            {
@@ -188,21 +189,75 @@ void python_channel (struct python_channel_data *this,
     }
 }
 
-void create_python_channel(const struct context_rmcios *context, const char *class_name)
+void python_module (PyObject *pModule,
+                    const struct context_rmcios *context, int id,
+                    enum function_rmcios function,
+                    enum type_rmcios paramtype,
+                    struct combo_rmcios *returnv,
+                    int num_params, const union param_rmcios param)
+{
+   switch (function)
+   {
+      case help_rmcios:
+       /* "create pymodule name test"
+         "setup name channel1"
+         "setup name channel2"*/
+         break;
+      case create_rmcios:
+            printf("create");
+         if (num_params < 2) break;
+    
+         if (Py_IsInitialized() == 0)
+         {
+            Py_Initialize();
+         }
+         int blen = param_string_alloc_size(context, paramtype, param, 1);       
+         {
+            char buffer[blen];
+            const char *module_name;
+            PyObject * pName;
+            module_name = param_to_string(context, paramtype, param, 1, blen, buffer);
+            pName = PyUnicode_DecodeFSDefault(module_name);
+            if(!pName) info (context, context->report, "NULL decode");
+            pModule = PyImport_Import(pName);
+            if(!pModule) printf("could not import module: %s\n", module_name);
+            create_channel_param (context, paramtype, param, 0, 
+                                  (class_rmcios)python_module, pModule);
+         }     
+         break;
+      case setup_rmcios:
+            printf("setup\n");
+         if (num_params < 1) 
+         {
+            printf("params");
+            break;
+         }
+         if (pModule == NULL){
+            printf("NULL\n");
+            break;
+   }
+         else
+         {
+            printf("setting up\n");
+            int blen = param_string_alloc_size(context, paramtype, param, 0);
+            {
+               char buffer[blen];
+               const char *channel_name;
+               channel_name = param_to_string(context, paramtype, param, 0, blen, buffer);
+               printf("creating:%s\n",channel_name);
+               create_python_channel(context, pModule, channel_name);
+            }
+         }
+         break;
+   }
+}
+
+void create_python_channel(const struct context_rmcios *context, PyObject *pModule, const char *class_name)
 {
     struct python_channel_data *this;    
     PyObject * pName;
     this = allocate_storage (context, sizeof (struct python_channel_data), 0);  
-
-    if (Py_IsInitialized() == 0)
-    {
-        Py_Initialize();
-    }
-    pName = PyUnicode_DecodeFSDefault("testi");
-    if(!pName) info (context, context->report, "NULL decode");
-    this->pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-
+    this->pModule=pModule;
     if (this->pModule) {
         this->pChannel = PyObject_GetAttrString(this->pModule, class_name);
         if (!this->pChannel) 
@@ -211,6 +266,7 @@ void create_python_channel(const struct context_rmcios *context, const char *cla
            return;
         }
         this->pHelp   = PyObject_GetAttrString(this->pChannel, "help");
+        if(this->pHelp==0) printf("NO HELP\n");
         this->pCreate = PyObject_GetAttrString(this->pChannel, "create");
         this->pSetup  = PyObject_GetAttrString(this->pChannel, "setup");
         this->pRead   = PyObject_GetAttrString(this->pChannel, "read");
@@ -218,7 +274,7 @@ void create_python_channel(const struct context_rmcios *context, const char *cla
     }
     else 
     {
-        info (context, context->report, "Could not load python module");
+        info (context, context->report, "Invalid python module\n");
         return;
     }
 
@@ -231,7 +287,7 @@ void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
    info (context, context->report,
          "python channels module\r\n[" VERSION_STR "]\r\n");
-   create_python_channel(context, "test_class");
+    create_channel_str (context, "pymodule", (class_rmcios)python_module, 0);
 }
 #endif
 
