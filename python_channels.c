@@ -173,7 +173,18 @@ void python_channel (struct python_channel_data *this,
                int x = PyLong_AsLong(ret);
                return_int(context, returnv, x);
            }
-           else{
+           else if PyUnicode_Check(ret)
+           {
+               int length;
+               char *s;
+               s = PyUnicode_AsUTF8AndSize(ret, &length);
+               if(s)
+               {
+                  return_buffer(context, returnv, s, length);
+               }
+           }
+           else 
+           {
                 printf("Unknown type\n");
            }
         }
