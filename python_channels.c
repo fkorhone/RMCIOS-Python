@@ -27,179 +27,7 @@ along with RMCIOS.  If not, see <http://www.gnu.org/licenses/>.
 #include <winsock.h> // Needed for TIMEVAL structure in windows
 #include <Python.h>
 
-PyObject *param_to_python(const struct context_rmcios *context, 
-                          enum type_rmcios paramtype, 
-                          const union param_rmcios param, int index)
-{
-    PyObject *pValue;
-
-    switch(paramtype)
-    {
-       case float_rmcios:
-          {
-             float fvalue;
-             fvalue = param_to_float(context, paramtype, param, index);
-             pValue = PyFloat_FromDouble(fvalue);
-          }
-          break;
-
-        case int_rmcios:
-          {
-             int ivalue;
-             ivalue = param_to_int(context, paramtype, param, index);
-             pValue = PyLong_FromLong(ivalue);
-          }
-          break;
-
-        case buffer_rmcios:
-          {
-             int len = param_string_alloc_size(context, paramtype, param, index);
-             {
-                const char *s;
-                char buffer[len];
-                s = param_to_string(context, paramtype, param, index, len, buffer);
-                pValue = PyBytes_FromString(s);
-             }
-          }
-          break;
-
-        case binary_rmcios:
-          {
-             int len= param_binary_length(context, paramtype, param, index);
-             {
-                char buffer[len];
-                param_to_binary(context, paramtype, param, index, len, buffer);
-                pValue = PyBytes_FromStringAndSize(buffer, len);
-             }
-          }
-          break;
-    }
-    return pValue;
-}
-
-PyObject * call_rmcios_as_python(PyObject *self, const struct context_rmcios *context, int id, PyObject *function, enum type_rmcios paramtype, int num_params, const union param_rmcios param)
-{
-    PyObject *pArgs;
-    PyObject *pParams;
-    PyObject *pValue;
-
-    // Collect parameters to python object
-    pArgs = PyTuple_New(4);
-    pParams = PyTuple_New(num_params);
-    int i;
-    for (i = 0; i < num_params; i++)
-    {
-        pValue = param_to_python(context, paramtype, param, i);
-        /* pValue reference stolen here: */
-        PyTuple_SetItem(pParams, i, pValue);
-    }
-    
-    PyTuple_SetItem(pArgs, 0, self); // self
-    PyTuple_SetItem(pArgs, 1, PyLong_FromVoidPtr((void *)context)); // context
-    PyTuple_SetItem(pArgs, 2, PyLong_FromLong(id)); // id
-    PyTuple_SetItem(pArgs, 3, pParams);            // params
-   
-    // Call function:
-    pValue = PyObject_CallObject(function, pArgs);
-    if(pValue == 0) 
-    {
-       PyObject *ptype, *pvalue, *ptraceback;
-       PyObject *pystr;
-       char *str;
-
-       PyErr_Fetch(&ptype, &pvalue, &ptraceback);
-       pystr = PyObject_Str(pvalue);
-       str = PyUnicode_AsUTF8(pystr);
-       printf("failed call: %s!\n",str);
-    }
-    Py_DECREF(pArgs);
-    return pValue;
-}
-
-void python_channel (PyObject *self,
-                          const struct context_rmcios *context, int id,
-                          enum function_rmcios function,
-                          enum type_rmcios paramtype,
-                          struct combo_rmcios *returnv,
-                          int num_params, const union param_rmcios param)
-{
-    PyObject *callFunc = NULL;
-    if (self == NULL) return;
-    
-    // Ensure calls from threads use GILState properly
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
-    switch (function)
-    {
-        case help_rmcios:
-            callFunc = PyObject_GetAttrString(self, "help");
-            break;
-        case create_rmcios:
-            callFunc = PyObject_GetAttrString(self, "create");
-            break;
-        case setup_rmcios:
-            callFunc = PyObject_GetAttrString(self, "setup");
-            break;
-        case read_rmcios:
-            callFunc = PyObject_GetAttrString(self, "read");
-            break;
-        case write_rmcios:
-            callFunc = PyObject_GetAttrString(self, "write");
-            break;
-    }
-
-    if (callFunc != NULL && PyCallable_Check(callFunc))
-    {
-        PyObject *ret = call_rmcios_as_python(self,
-                                              context,
-                                              id,
-                                              callFunc, 
-                                              paramtype,
-                                              num_params, param);
-
-        if(ret && ret != Py_BuildValue(""))
-        {
-           if(PyFloat_Check(ret))
-           {
-               float x = PyFloat_AsDouble(ret);
-               return_float(context, returnv, x);
-           }
-           else if (PyLong_Check(ret))
-           {
-               int x = PyLong_AsLong(ret);
-               return_int(context, returnv, x);
-           }
-           else if PyUnicode_Check(ret)
-           {
-               int length;
-               char *s;
-               s = PyUnicode_AsUTF8AndSize(ret, &length);
-               if(s)
-               {
-                  return_buffer(context, returnv, s, length);
-               }
-           }
-           else 
-           {
-                printf("Unknown type\n");
-           }
-        }
-        else
-        {
-           printf("not ret value");
-        }
-        Py_XDECREF(callFunc);
-    }
-    else
-    {
-        printf("No function\n");
-    }
-
-    /* Release the thread. No Python API allowed beyond this point. */
-    PyGILState_Release(gstate);
-}
-
-void python_module (PyObject *pModule,
+void python_module (void *data,
                     const struct context_rmcios *context, int id,
                     enum function_rmcios function,
                     enum type_rmcios paramtype,
@@ -213,103 +41,102 @@ void python_module (PyObject *pModule,
    switch (function)
    {
       case help_rmcios:
-       /* "create pymodule name test"
-         "setup name channel1"
-         "setup name channel2"*/
+         /*
+         "write python code\n"
+         */
          break;
-      case create_rmcios:
-         if (num_params < 2) break;
-    
-         int blen = param_string_alloc_size(context, paramtype, param, 1);       
+      
+      case write_rmcios:
+         if (returnv != NULL && 
+             returnv->paramtype == channel_rmcios &&
+             returnv->num_params > 0)
          {
-            char buffer[blen];
-            const char *module_name;
-            PyObject * pName;
-            module_name = param_to_string(context, paramtype, param, 1, blen, buffer);
-            pName = PyUnicode_DecodeFSDefault(module_name);
-            if(!pName) info (context, context->report, "NULL decode");
-            pModule = PyImport_Import(pName);
-            Py_DECREF(pName);
-            
-            if(!pModule) 
-            {  
-               PyObject *ptype, *pvalue, *ptraceback;
-               PyObject *pystr;
-               char *str;
+            printf("redirect\n");
+             // Context variable
+             char cmd[255];
+             sprintf(cmd,"context=0x%x\n", context);
+             PyRun_SimpleString(cmd);
 
-               PyErr_Fetch(&ptype, &pvalue, &ptraceback);
-               pystr = PyObject_Str(pvalue);
-               str = PyUnicode_AsUTF8(pystr);
-               printf("could not import module: %s %s\n", module_name, str);
-            }
-            create_channel_param (context, paramtype, param, 0, 
-                                  (class_rmcios)python_module, pModule);
-         }     
-         break;
-      case setup_rmcios:
-         if (num_params < 1) 
-         {
-            break;
+             sprintf(cmd,"sys.stdout = ChannelFile(0x%x,%d)\n", context, returnv->param.channel);
+             PyRun_SimpleString(cmd);
+
+             sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->warnings);
+             PyRun_SimpleString(cmd);
          }
-         if (pModule == NULL){
+
+        if(num_params < 1)
+        {
             break;
-   }
-         else
-         {
+        }
+        else if(num_params == 1)
+        {
             int blen = param_string_alloc_size(context, paramtype, param, 0);
             {
-               char buffer[blen];
-               const char *channel_name;
-               channel_name = param_to_string(context, paramtype, param, 0, blen, buffer);
-               create_python_channel(context, pModule, channel_name);
+                char buffer[ blen ];
+                char *s = param_to_string(context, paramtype, param, 0, blen, buffer);
+                PyRun_SimpleString(s);
             }
-         }
-         break;
+        }
+        else
+        {
+            // Combine parameters into single string
+            int i;
+            int lengths[num_params];
+            int tot_length = 0;
+            for(i = 0; i < num_params; i++)
+            {
+                lengths[i] = param_string_length(context, paramtype, param, i);
+                tot_length += lengths[i];
+            }
+            tot_length += num_params + 1; // Space for whitespace between params, newline and terminating 0   
+
+            {
+                char buffer[tot_length];
+                int pos=0; 
+
+                for(i = 0; i < num_params; i++)
+                {
+                    int plen = lengths[i];
+                    char *s = param_to_string(context, paramtype, param, i, tot_length - pos, buffer + pos);
+                    buffer[pos + plen] = ' ';
+                    pos += plen + 1;
+                }
+
+                buffer[tot_length - 2] = '\n';
+                buffer[tot_length - 1] = 0;
+
+                PyRun_SimpleString(buffer);
+            }
+        }
+        break;
    }
 
    /* Release the thread. No Python API allowed beyond this point. */
    PyGILState_Release(gstate);
 }
 
-void create_python_channel(const struct context_rmcios *context, PyObject *pModule, const char *class_name)
-{
-    // Ensure calls from threads use GILState properly
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
-
-    PyObject *this;    
-    if (pModule) {
-        this = PyObject_GetAttrString(pModule, class_name);
-        if (!this)
-        {
-           info (context, context->report, "Could not load class");
-           return;
-        }
-
-    }
-    else 
-    {
-        info (context, context->report, "Invalid python module\n");
-        return;
-    }
-
-    create_channel_str (context, class_name, (class_rmcios) python_channel, this);
-
-    /* Release the thread. No Python API allowed beyond this point. */
-    PyGILState_Release(gstate);
-}
-
 #ifdef INDEPENDENT_CHANNEL_MODULE
 // function for dynamically loading the module
 void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
-   info (context, context->report,
+    info (context, context->report,
          "python channels module\r\n[" VERSION_STR "]\r\n");
 
     Py_Initialize();
     PyEval_InitThreads();
+    
+    // Context variable
+    char cmd[255];
+    sprintf(cmd,"context=0x%x\n", context);
+    PyRun_SimpleString(cmd);
 
-    create_channel_str (context, "pymodule", (class_rmcios)python_module, 0);
+    sprintf(cmd,"import sys\nsys.stdout = ChannelFile(0x%x,%d)\n", context, context->report);
+    PyRun_SimpleString(cmd);
+   
+    sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->report);
+    PyRun_SimpleString(cmd);
+
+    create_channel_str (context, "python", (class_rmcios)python_module, NULL);
 }
 #endif
 
