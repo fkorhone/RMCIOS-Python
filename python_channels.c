@@ -60,7 +60,7 @@ void python_module (void *data,
              sprintf(cmd,"sys.stdout = ChannelFile(0x%x,%d)\n", context, returnv->param.channel);
              PyRun_SimpleString(cmd);
 
-             sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->warnings);
+             sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->warning);
              PyRun_SimpleString(cmd);
          }
 

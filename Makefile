@@ -1,7 +1,7 @@
 SRC_DIR:=RMCIOS-python
 SOURCES:=*.c
 FILENAME:=python-module
-CFLAGS+=-I../../python/include/
+CFLAGS+=-I../../../python/include/
 CFLAGS+=libpython.a 
 GCC?=gcc
 DLLTOOL?=dlltool
