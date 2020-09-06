@@ -1,0 +1,8 @@
+LIBRARY "python38.dll"
+EXPORTS
+Py_Initialize
+PyGILState_Ensure
+PyGILState_Release
+PyRun_SimpleString
+PyEval_InitThreads
+
