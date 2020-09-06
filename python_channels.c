@@ -26,6 +26,7 @@ along with RMCIOS.  If not, see <http://www.gnu.org/licenses/>.
 #include "RMCIOS-functions.h"
 #include <winsock.h> // Needed for TIMEVAL structure in windows
 #include <Python.h>
+#include <stdio.h>
 
 void python_module (void *data,
                     const struct context_rmcios *context, int id,
@@ -51,16 +52,15 @@ void python_module (void *data,
              returnv->paramtype == channel_rmcios &&
              returnv->num_params > 0)
          {
-            printf("redirect\n");
              // Context variable
              char cmd[255];
-             sprintf(cmd,"context=0x%x\n", context);
+             sprintf(cmd,"context=0x%p\n", context);
              PyRun_SimpleString(cmd);
 
-             sprintf(cmd,"sys.stdout = ChannelFile(0x%x,%d)\n", context, returnv->param.channel);
+             sprintf(cmd,"sys.stdout = ChannelFile(0x%p,%d)\n", context, returnv->param.channel);
              PyRun_SimpleString(cmd);
 
-             sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->warning);
+             sprintf(cmd,"sys.stderr = ChannelFile(0x%p,%d)\n", context, context->warning);
              PyRun_SimpleString(cmd);
          }
 
@@ -73,7 +73,7 @@ void python_module (void *data,
             int blen = param_string_alloc_size(context, paramtype, param, 0);
             {
                 char buffer[ blen ];
-                char *s = param_to_string(context, paramtype, param, 0, blen, buffer);
+                const char *s = param_to_string(context, paramtype, param, 0, blen, buffer);
                 PyRun_SimpleString(s);
             }
         }
@@ -97,7 +97,7 @@ void python_module (void *data,
                 for(i = 0; i < num_params; i++)
                 {
                     int plen = lengths[i];
-                    char *s = param_to_string(context, paramtype, param, i, tot_length - pos, buffer + pos);
+                    param_to_string(context, paramtype, param, i, tot_length - pos, buffer + pos);
                     buffer[pos + plen] = ' ';
                     pos += plen + 1;
                 }
@@ -119,21 +119,20 @@ void python_module (void *data,
 // function for dynamically loading the module
 void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
-    info (context, context->report,
-         "python channels module\r\n[" VERSION_STR "]\r\n");
+    info (context, context->report, "python channels module\r\n[" VERSION_STR "]\r\n");
 
     Py_Initialize();
     PyEval_InitThreads();
     
     // Context variable
     char cmd[255];
-    sprintf(cmd,"context=0x%x\n", context);
+    sprintf(cmd,"context=0x%p\n", context);
     PyRun_SimpleString(cmd);
 
-    sprintf(cmd,"import sys\nsys.stdout = ChannelFile(0x%x,%d)\n", context, context->report);
+    sprintf(cmd,"import sys\nsys.stdout = ChannelFile(0x%p,%d)\n", context, context->report);
     PyRun_SimpleString(cmd);
    
-    sprintf(cmd,"sys.stderr = ChannelFile(0x%x,%d)\n", context, context->report);
+    sprintf(cmd,"sys.stderr = ChannelFile(0x%p,%d)\n", context, context->report);
     PyRun_SimpleString(cmd);
 
     create_channel_str (context, "python", (class_rmcios)python_module, NULL);
