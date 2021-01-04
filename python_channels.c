@@ -48,21 +48,6 @@ void python_module (void *data,
          break;
       
       case write_rmcios:
-         if (returnv != NULL && 
-             returnv->paramtype == channel_rmcios &&
-             returnv->num_params > 0)
-         {
-             // Context variable
-             char cmd[255];
-             sprintf(cmd,"context=0x%p\n", context);
-             PyRun_SimpleString(cmd);
-
-             sprintf(cmd,"sys.stdout = ChannelFile(0x%p,%d)\n", context, returnv->param.channel);
-             PyRun_SimpleString(cmd);
-
-             sprintf(cmd,"sys.stderr = ChannelFile(0x%p,%d)\n", context, context->warning);
-             PyRun_SimpleString(cmd);
-         }
 
         if(num_params < 1)
         {
@@ -70,6 +55,10 @@ void python_module (void *data,
         }
         else if(num_params == 1)
         {
+            char cmd[64]; 
+            sprintf(cmd,"context=0x%p\n", context);
+            PyRun_SimpleString(cmd);
+            
             int blen = param_string_alloc_size(context, paramtype, param, 0);
             {
                 char buffer[ blen ];
@@ -79,6 +68,10 @@ void python_module (void *data,
         }
         else
         {
+            char cmd[64]; 
+            sprintf(cmd,"context=0x%p\n", context);
+            PyRun_SimpleString(cmd);
+            
             // Combine parameters into single string
             int i;
             int lengths[num_params];
@@ -123,18 +116,6 @@ void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 
     Py_Initialize();
     PyEval_InitThreads();
-    
-    // Context variable
-    char cmd[255];
-    sprintf(cmd,"context=0x%p\n", context);
-    PyRun_SimpleString(cmd);
-
-    sprintf(cmd,"import sys\nsys.stdout = ChannelFile(0x%p,%d)\n", context, context->report);
-    PyRun_SimpleString(cmd);
-   
-    sprintf(cmd,"sys.stderr = ChannelFile(0x%p,%d)\n", context, context->report);
-    PyRun_SimpleString(cmd);
-
     create_channel_str (context, "python", (class_rmcios)python_module, NULL);
 }
 #endif
