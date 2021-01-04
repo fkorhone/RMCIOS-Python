@@ -1,86 +1,77 @@
+import traceback
 from RMCIOS_API import *
 
 CHFUNC = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
-def float_param_to_python(context, paramtype, param, index):
-    float_array_type = ctypes.c_float * (index + 1)
-    floats = float_array_type.from_address(param)
-    return floats[index]
-
-def int_param_to_python(context, paramtype, param, index):
-    int_array_type = ctypes.c_int * (index + 1)
-    ints = int_array_type.from_address(param)
-    return ints[index]
-
-def buffer_param_to_python(context, paramtype, param, index):
-    buffer_array_type = buffer_rmcios * (index + 1)
-    buffers = buffer_array_type.from_address(param)
-    buf = buffers[index]
-    data_array_type = ctypes.c_char * buf.length
-    data_array = data_array_type.from_address( ctypes.cast(buf.data,ctypes.c_void_p).value )
-    return data_array.value.decode()
-
-def binary_param_to_python(context, paramtype, param, index):
-    buffer_array_type = buffer_rmcios * (index + 1)
-    buffers = buffer_array_type.from_address(param)
-    buf = buffers[index]
-    data_array_type = ctypes.c_char * buf.length
-    data_array = data_array_type.from_address( ctypes.cast(buf.data,ctypes.c_void_p).value )
-    return data_array.value
-
-def combo_param_to_python(context, paramtype, param, index):
-    combo_array_type = combo_rmcios * (index + 1)
-    params = combo_array_type.from_address(param)
-    param = params[intex]
-    #if param.paramtype == INT_RMCIOS:
-
-    #if param.paramtype == FLOAT_RMCIOS:
-
-    #if param.paramtype == BUFFER_RMCIOS:
-
-    #if param.paramtype == BINARY_RMCIOS:
-
-    return None
-
-
-conversion_functions = [None, 
-                        int_param_to_python, 
-                        float_param_to_python,
-                        buffer_param_to_python,
-                        None,
-                        binary_param_to_python,
-                        combo_param_to_python,
-                        ]
-
 # array to keep callback references alive. We don't want funcs to be garbage collected.
 funcrefs = []
 
-def param_to_python(context, paramtype, param, index):
-    if paramtype >= len(conversion_functions):
-        return None
-    if conversion_functions[paramtype] == 0:
-        return None
-    pyparam = conversion_functions[paramtype](context, paramtype, param, index)
-    return pyparam
+class Param:
+    # TODO
+    def __init__(self, context, paramtype, param, index):
+        self.context = context
+        self.paramtype = paramtype
+        self.param = param
+        self.index = index
+    
+    def __int__(self):
+        value = ctypes.c_int(0)
+        params = combo_rmcios(INT_RMCIOS, 1, ctypes.addressof(value), 0) 
+        self.context.run_channel(self.context.data, ctypes.addressof(self.context), self.context.convert, WRITE_RMCIOS, self.paramtype, ctypes.pointer(params), self.index + 1, self.param)
+    
+        return value.value
 
-def rmcios_python_context(c_context):
-    # Convert context pointer to python context object
-    python_context = CONTEXT.from_address(c_context)
-    python_context.c_context = c_context
-    return python_context
+    def __float__(self):
+        value = ctypes.c_float(0)
+        params = combo_rmcios(FLOAT_RMCIOS, 1, ctypes.addressof(value), 0)
+        self.context.run_channel(self.context.data, ctypes.addressof(self.context), self.context.convert, WRITE_RMCIOS, self.paramtype, ctypes.pointer(params), self.index + 1, self.param)
+        return value.value
 
-def ch_func(data, context, id, function, paramtype, returnv, num_params, param):
+    def _to_buffer(self):
+        # Get required size:
+
+        params = combo_rmcios(BUFFER_RMCIOS, 1, 0, 0) 
+        self.context.run_channel(self.context.data, ctypes.addressof(self.context), self.context.convert, READ_RMCIOS, self.paramtype, ctypes.pointer(params), self.index + 1, self.param)
+        buff = buffer_rmcios.from_address(params.param)
+
+        # Convert to string:
+        cBuffer = ctypes.create_string_buffer( buff.required_size )
+        buff = buffer_rmcios(data = cBuffer,
+                         length = 0,
+                         size = buff.required_size,
+                         required_size = 0,
+                         trailing_size = 0)
+        params = combo_rmcios(BUFFER_RMCIOS, 1, ctypes.addressof(buff), 0) 
+        self.context.run_channel(self.context.data, ctypes.addressof(self.context), self.context.convert, WRITE_RMCIOS, self.paramtype, ctypes.pointer(params), self.index + 1, self.param)
+        return cBuffer.value
+
+    def __str__(self):
+        return self._to_buffer().decode('ascii')
+
+    def __iter__(self):
+        self.buffer_data = self._to_buffer()
+        self.iterate_index = -1
+        return self
+
+    def __next__(self):
+        self.iterate_index += 1
+        if self.iterate_index < len(self.buffer_data):
+            return self.buffer_data[self.iterate_index]
+        else:
+            raise StopIteration 
+
+def ch_func(data, context_addr, id, function, paramtype, returnv, num_params, param):
       # Convert data pointer to python object
       cpobject = ctypes.cast(data, ctypes.POINTER(ctypes.py_object))
       python_object = cpobject.contents.value
 
       # Convert context pointer to python context object
-      python_context = rmcios_python_context(context)
+      python_context = CONTEXT.from_address(context_addr)
 
       # convert prameters to python list with python objects
       pyparams = []
       for index in range(num_params):
-        pyparams.append(param_to_python(python_context, paramtype, param, index))
+        pyparams.append(Param(python_context, paramtype, param, index))
 
       # Look for function to execute from python object:
       try:
@@ -89,11 +80,11 @@ def ch_func(data, context, id, function, paramtype, returnv, num_params, param):
         func(python_object, python_context, id, *pyparams)
       except:
         print("Error executing python object member function")
+        traceback.print_exc() 
       
       return
 
-def create_python_channel(c_context, name, data):
-      x = CONTEXT.from_address(c_context)
+def create_python_channel(context, name, data):
       namebuffer = ctypes.create_string_buffer(name.encode())
      
       # Create c function pointer and convert it to generic c buffer (char *)
@@ -106,13 +97,28 @@ def create_python_channel(c_context, name, data):
       ptr_as_c_buffer = ctypes.cast( ctypes.pointer(pobject), ctypes.POINTER(ctypes.c_char)) 
       
       # Create array of binary parameters  for channel execution:
-      buffers_type = buffer_rmcios * 3
-      buffers = buffers_type( (namebuffer, len(name), 0, len(name), 0),
-                            ( func_as_c_buffer, ctypes.sizeof(channel), 0, ctypes.sizeof(channel), 0),
-                            ( ptr_as_c_buffer, ctypes.sizeof(pobject), 0, ctypes.sizeof(pobject), 0))
+      buffers_type = buffer_rmcios * 2
+      buffers = buffers_type( ( func_as_c_buffer, ctypes.sizeof(channel), 0, ctypes.sizeof(channel), 0),
+                              ( ptr_as_c_buffer, ctypes.sizeof(pobject), 0, ctypes.sizeof(pobject), 0) )
+
+      # Create buffer name 
+      name_buffer = buffer_rmcios(namebuffer, len(name), 0, len(name), 0)
+
+      # create combo param for returnv and params for creating name
+      new_channel_id = ctypes.c_int(0)
+      combo_array_type = combo_rmcios * 2
+      params = combo_array_type( (INT_RMCIOS, 1, ctypes.addressof(new_channel_id),0), 
+                                 (BUFFER_RMCIOS, 1, ctypes.addressof(name_buffer),0))
 
       # Call channel context.create to create the new channel
-      x.run_channel(x.data, c_context, x.create, CREATE_RMCIOS, BINARY_RMCIOS, 0, 3, buffers)
+      context.run_channel(context.data, ctypes.addressof(context), context.create, CREATE_RMCIOS, BINARY_RMCIOS, params, 2, buffers)
+
+      print ("new_id: %d" % int(new_channel_id.value) )
+
+      # Add name for the channel
+      if len(name) > 0:
+        context.run_channel(context.data, ctypes.addressof(context), context.name, WRITE_RMCIOS, COMBO_RMCIOS, 0, 2, params)
+      return new_channel_id
 
 def run_channel(context, channel, function, *args):
     #params = combo_rmcios() * len(args)
@@ -140,11 +146,11 @@ def run_channel(context, channel, function, *args):
 
     if(pure_ints):
         intargtype = ctypes.c_int * len(args)
-        return context.run_channel(context.data, context.c_context, channel, function, INT_RMCIOS, 0, len(args), intargtype(*args))
+        return context.run_channel(context.data, ctypes.addressof(context), channel, function, INT_RMCIOS, 0, len(args), intargtype(*args))
 
     if(pure_floats):
         floatargtype = ctypes.c_float * len(args)
-        return context.run_channel(context.data, context.c_context, channel, function, FLOAT_RMCIOS, 0, len(args), floatargtype(*args))
+        return context.run_channel(context.data, ctypes.addressof(context), channel, function, FLOAT_RMCIOS, 0, len(args), floatargtype(*args))
     
     if(pure_buffers):
         buffersargtype = buffer_rmcios * len(args)
@@ -154,7 +160,7 @@ def run_channel(context, channel, function, *args):
             buffers.append((cBuffer, len(arg), 0, len(arg), 0))
         
         params=buffersargtype(*buffers)
-        return context.run_channel(context.data, context.c_context, channel, function, BUFFER_RMCIOS, 0, len(args), ctypes.pointer(params))
+        return context.run_channel(context.data, ctypes.addressof(context), channel, function, BUFFER_RMCIOS, 0, len(args), ctypes.pointer(params))
     
     # This is a combined parameter type call
     combosArgType = combo_rmcios * len(args)
@@ -163,7 +169,7 @@ def run_channel(context, channel, function, *args):
     intArguments = []
     for arg in args:
         if isinstance(arg, int):
-            argstore.append(ctypes.c_int(4))
+            argstore.append(ctypes.c_int(arg))
             comboArguments.append((1, 1, ctypes.addressof(argstore[-1]), None))
 
         if isinstance(arg, float):
@@ -181,7 +187,7 @@ def run_channel(context, channel, function, *args):
             comboArguments.append((BUFFER_RMCIOS, 1, ctypes.addressof(argstore[-1]), None))
 
     params = combosArgType(*comboArguments)
-    return context.run_channel(context.data, context.c_context, channel, function, COMBO_RMCIOS, 0, len(args), ctypes.pointer(params))
+    return context.run_channel(context.data, ctypes.addressof(context), channel, function, COMBO_RMCIOS, 0, len(args), ctypes.pointer(params))
 
 def help_channel(context, channel, *args):
     return run_channel(context, channel, HELP_RMCIOS, *args)
@@ -196,8 +202,8 @@ def write_channel(context, channel, *args):
     return run_channel(context, channel, WRITE_RMCIOS, *args)
 
 class ChannelFile(object):
-    def __init__(self, c_context, channel):
-        self.python_context = rmcios_python_context(c_context)
+    def __init__(self, context, channel):
+        self.python_context = context
         self.channel = channel
 
     def write(self, message):

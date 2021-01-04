@@ -55,6 +55,7 @@ class CONTEXT(ctypes.Structure):
         ("control", ctypes.c_int),
         ("link", ctypes.c_int),
         ("linked", ctypes.c_int),
-        ("create", ctypes.c_int)
+        ("create", ctypes.c_int),
+        ("convert", ctypes.c_int)
         ]
 
