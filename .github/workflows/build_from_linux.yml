@@ -19,8 +19,8 @@ jobs:
     - name: clone submodules
       run: git submodule update --init
 
-    - name: compile
-      run: make
+    - name: compile win32
+      run: make TOOL_PREFIX=i686-w64-mingw32-
 
     - name: copy files
       run: make install INSTALLDIR=artifacts
