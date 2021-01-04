@@ -7,7 +7,7 @@ CFLAGS+=libpython.a
 GCC?=${TOOL_PREFIX}gcc
 DLLTOOL?=${TOOL_PREFIX}dlltool
 MAKE?=make
-INSTALLDIR:=..${/}..${/}
+INSTALLDIR:=..${/}..
 export
 
 compile:
@@ -15,7 +15,7 @@ compile:
 	$(MAKE) -f RMCIOS-build-scripts${/}module_dll.mk compile TOOL_PREFIX=${TOOL_PREFIX}
 
 install:
-	${MKDIR} ${INSTALLDIR}modules
-	${COPY} python-module.dll ${INSTALLDIR}modules
-	${COPY} *.py ${INSTALLDIR}
+	${MKDIR} ${INSTALLDIR}${/}modules
+	${COPY} python-module.dll ${INSTALLDIR}${/}modules
+	${COPY} *.py ${INSTALLDIR}${/}
 
