@@ -24,7 +24,6 @@ along with RMCIOS.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PY_SSIZE_T_CLEAN
 #include "RMCIOS-functions.h"
-#include <winsock.h> // Needed for TIMEVAL structure in windows
 #include <Python.h>
 #include <stdio.h>
 
