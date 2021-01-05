@@ -34,12 +34,12 @@ jobs:
     - uses: actions/upload-artifact@v1
       name: upload win32 artifacts
       with:
-        name: Python module
+        name: Python module-win32
         path: artifacts/win32
 
     - uses: actions/upload-artifact@v1
       name: upload win64 artifacts
       with:
-        name: Python module
+        name: Python-module-win64
         path: artifacts/win64
 
