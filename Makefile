@@ -2,7 +2,7 @@ include RMCIOS-build-scripts/utilities.mk
 
 SOURCES:=*.c
 FILENAME:=python-module
-CFLAGS+=-Ilinklib${/}
+CFLAGS+=-Ilinklib
 CFLAGS+=libpython.a 
 GCC?=${TOOL_PREFIX}gcc
 DLLTOOL?=${TOOL_PREFIX}dlltool
