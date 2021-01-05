@@ -15,7 +15,7 @@ compile:
 	$(MAKE) -f RMCIOS-build-scripts${/}module_dll.mk compile TOOL_PREFIX=${TOOL_PREFIX}
 
 install:
-	${MKDIR} ${INSTALLDIR}${/}modules
+	-${MKDIR} "${INSTALLDIR}${/}modules"
 	${COPY} python-module.dll ${INSTALLDIR}${/}modules
 	${COPY} *.py ${INSTALLDIR}${/}
 
