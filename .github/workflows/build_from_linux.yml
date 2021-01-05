@@ -21,13 +21,25 @@ jobs:
 
     - name: compile win32
       run: make TOOL_PREFIX=i686-w64-mingw32-
+      
+    - name: copy win32 files
+      run: make install INSTALLDIR=artifacts/win32
 
-    - name: copy files
-      run: make install INSTALLDIR=artifacts
+    - name: compile win64
+      run: make TOOL_PREFIX=x86_64-w64-mingw32-
+
+    - name: copy win64 files
+      run: make install INSTALLDIR=artifacts/win64
 
     - uses: actions/upload-artifact@v1
-      name: upload artifacts
+      name: upload win32 artifacts
       with:
         name: Python module
-        path: artifacts
+        path: artifacts/win32
+
+    - uses: actions/upload-artifact@v1
+      name: upload win64 artifacts
+      with:
+        name: Python module
+        path: artifacts/win64
 
