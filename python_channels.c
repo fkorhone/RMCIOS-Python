@@ -27,6 +27,8 @@ along with RMCIOS.  If not, see <http://www.gnu.org/licenses/>.
 #include <Python.h>
 #include <stdio.h>
 
+static initialized = 0; 
+
 void python_module (void *data,
                     const struct context_rmcios *context, int id,
                     enum function_rmcios function,
@@ -34,10 +36,6 @@ void python_module (void *data,
                     struct combo_rmcios *returnv,
                     int num_params, const union param_rmcios param)
 {
-   // Ensure calls from threads use GILState properly
-   PyGILState_STATE gstate;
-   gstate = PyGILState_Ensure();
-   
    switch (function)
    {
       case help_rmcios:
@@ -45,8 +43,21 @@ void python_module (void *data,
          "write python code\n"
          */
          break;
-      
+      case setup_rmcios:
+        if(initialized == 0)
+        {
+            Py_Initialize();
+            PyEval_InitThreads(); 
+            initialized = 1;
+        }
+        break;
       case write_rmcios:
+        if(initialized == 0)
+        {
+            Py_Initialize();
+            PyEval_InitThreads(); 
+            initialized = 1;
+        }
 
         if(num_params < 1)
         {
@@ -54,6 +65,10 @@ void python_module (void *data,
         }
         else if(num_params == 1)
         {
+            // Ensure calls from threads use GILState properly
+            PyGILState_STATE gstate;
+            gstate = PyGILState_Ensure();
+            
             char cmd[64]; 
             sprintf(cmd,"context=0x%p\n", context);
             PyRun_SimpleString(cmd);
@@ -64,9 +79,16 @@ void python_module (void *data,
                 const char *s = param_to_string(context, paramtype, param, 0, blen, buffer);
                 PyRun_SimpleString(s);
             }
+            
+            /* Release the thread. No Python API allowed beyond this point. */
+            PyGILState_Release(gstate);
         }
         else
         {
+            // Ensure calls from threads use GILState properly
+            PyGILState_STATE gstate;
+            gstate = PyGILState_Ensure();
+            
             char cmd[64]; 
             sprintf(cmd,"context=0x%p\n", context);
             PyRun_SimpleString(cmd);
@@ -99,12 +121,12 @@ void python_module (void *data,
 
                 PyRun_SimpleString(buffer);
             }
+            /* Release the thread. No Python API allowed beyond this point. */
+            PyGILState_Release(gstate);
         }
         break;
    }
 
-   /* Release the thread. No Python API allowed beyond this point. */
-   PyGILState_Release(gstate);
 }
 
 #ifdef INDEPENDENT_CHANNEL_MODULE
@@ -112,9 +134,6 @@ void python_module (void *data,
 void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
     info (context, context->report, "python channels module\r\n[" VERSION_STR "]\r\n");
-
-    Py_Initialize();
-    PyEval_InitThreads();
     create_channel_str (context, "python", (class_rmcios)python_module, NULL);
 }
 #endif
