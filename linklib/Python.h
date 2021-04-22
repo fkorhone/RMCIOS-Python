@@ -13,11 +13,11 @@ typedef enum {
   PyGILState_UNLOCKED
 } PyGILState_STATE;
 
-PyAPI_FUNC(void) Py_Initialize(void);
-PyAPI_FUNC(void) PyEval_InitThreads(void);
-PyAPI_FUNC(PyGILState_STATE) PyGILState_Ensure(void);
-PyAPI_FUNC(void) PyGILState_Release(PyGILState_STATE);
-PyAPI_FUNC(int) PyRun_SimpleString(const char *s);
+PyAPI_FUNC(void) (* Py_Initialize)(void);
+PyAPI_FUNC(void) (* PyEval_InitThreads)(void);
+PyAPI_FUNC(PyGILState_STATE) (* PyGILState_Ensure)(void);
+PyAPI_FUNC(void) (* PyGILState_Release)(PyGILState_STATE);
+PyAPI_FUNC(int) (* PyRun_SimpleString)(const char *s);
 
 typedef struct _object PyObject;
 

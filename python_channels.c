@@ -26,6 +26,7 @@ along with RMCIOS.  If not, see <http://www.gnu.org/licenses/>.
 #include "RMCIOS-functions.h"
 #include <Python.h>
 #include <stdio.h>
+#include <wtypes.h>
 
 static initialized = 0; 
 
@@ -128,12 +129,26 @@ void python_module (void *data,
    }
 
 }
+HINSTANCE hDLLInstance;
 
 #ifdef INDEPENDENT_CHANNEL_MODULE
 // function for dynamically loading the module
 void API_ENTRY_FUNC init_channels (const struct context_rmcios *context)
 {
     info (context, context->report, "python channels module\r\n[" VERSION_STR "]\r\n");
+    if (hDLLInstance = LoadLibrary ("../python/python38.dll"))
+    {
+      //If successfully loaded, get the address of the desired functions.
+      Py_Initialize = GetProcAddress (hDLLInstance, "Py_Initialize");
+      PyEval_InitThreads = GetProcAddress (hDLLInstance, "PyEval_InitThreads");
+      PyGILState_Ensure = GetProcAddress (hDLLInstance, "PyGILState_Ensure");
+      PyGILState_Release = GetProcAddress (hDLLInstance, "PyGILState_Release");
+      PyRun_SimpleString = GetProcAddress (hDLLInstance, "PyRun_SimpleString");
+    }
+    else
+    {
+      printf ("Failed to load python38.DLL\n");
+    }
     create_channel_str (context, "python", (class_rmcios)python_module, NULL);
 }
 #endif
