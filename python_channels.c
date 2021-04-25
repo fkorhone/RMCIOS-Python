@@ -40,9 +40,22 @@ void python_module (void *data,
    switch (function)
    {
       case help_rmcios:
-         /*
-         "write python code\n"
-         */
+        return_string (context, returnv,
+                       "python channel\n"
+                       "create python newname | python_library_location(python/default) | python_home(python/default)\n" 
+                       "    Create new python interperter. Optionally specify shared library location and python home\n"
+                       "setup context_variable(context) | python_path(pymodules/default/) \n"
+                       "    Context address variable name and optionally python module search path\n"
+                       "    Variable named by context_variable parameter is added to the executed python code\n"
+                       "    Passed variable enables python code capability to interact with RMCIOS system\n"
+                       "    Disable context_variable by setting it to value 0\n"
+                       "setup python\n"
+                       "    Read python configuration\n"
+                       "write python command\n"
+                       "    Execute python command with the interpereter\n"
+                       "    Multiple command parameters are joined together to form unified python code\n"
+                       "    Each write are given to python directly. Therefore writes need to represent execute ready python code (not part of it)\n"
+                       );
          break;
       case setup_rmcios:
         if(initialized == 0)
