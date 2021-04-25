@@ -7,6 +7,7 @@ GCC?=${TOOL_PREFIX}gcc
 DLLTOOL?=${TOOL_PREFIX}dlltool
 MAKE?=make
 INSTALLDIR:=..${/}..
+PYLIBDIR = pymodules${/}default${/}RMCIOS
 export
 
 compile:
@@ -15,5 +16,6 @@ compile:
 install:
 	-${MKDIR} "${INSTALLDIR}${/}modules"
 	${COPY} python-module.dll ${INSTALLDIR}${/}modules
-	${COPY} *.py ${INSTALLDIR}${/}
+	-${MKDIR} "${INSTALLDIR}${/}${PYLIBDIR}"
+	${COPY} ${PYLIBDIR}${/}*.py ${INSTALLDIR}${/}${PYLIBDIR}
 

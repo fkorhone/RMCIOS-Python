@@ -1,6 +1,8 @@
 #ifndef PYTHON_H
 #define PYTHOn_H
 
+#include <wchar.h>
+
 #define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
 
 #define Py_single_input 256
