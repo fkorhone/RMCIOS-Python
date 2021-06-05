@@ -1,5 +1,5 @@
 import traceback
-from RMCIOS_API import *
+from RMCIOS.API import *
 
 CHFUNC = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
@@ -112,8 +112,6 @@ def create_python_channel(context, name, data):
 
       # Call channel context.create to create the new channel
       context.run_channel(context.data, ctypes.addressof(context), context.create, CREATE_RMCIOS, BINARY_RMCIOS, params, 2, buffers)
-
-      print ("new_id: %d" % int(new_channel_id.value) )
 
       # Add name for the channel
       if len(name) > 0:
