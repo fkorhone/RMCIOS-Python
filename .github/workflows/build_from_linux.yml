@@ -14,7 +14,9 @@ jobs:
       run: sudo apt install gcc-mingw-w64-i686
     - name: install gcc win64
       run: sudo apt install gcc-mingw-w64-x86-64
-    
+    - name: install other tools    
+      run: sudo apt install unzip wget
+
     - uses: actions/checkout@v2
     - name: clone submodules
       run: git submodule update --init
@@ -34,7 +36,7 @@ jobs:
     - uses: actions/upload-artifact@v1
       name: upload win32 artifacts
       with:
-        name: Python module-win32
+        name: Python-module-win32
         path: artifacts/win32
 
     - uses: actions/upload-artifact@v1
@@ -42,4 +44,36 @@ jobs:
       with:
         name: Python-module-win64
         path: artifacts/win64
+
+    - name: create directories
+      run: mkdir -p artifacts/win32/python/default; mkdir -p artifacts/win64/python/default
+
+    - name: Get embedded 32bit python
+      run: wget https://www.python.org/ftp/python/3.8.5/python-3.8.5-embed-win32.zip
+      working-directory: artifacts/win32/python/default
+   
+    - name: extract python
+      run: unzip python-3.8.5-embed-win32.zip; unzip python38.zip
+      working-directory: artifacts/win32/python/default
+
+    - uses: actions/upload-artifact@v1
+      name: upload win32 artifacts with python
+      with:
+        name: Python-module-win32-python38
+        path: artifacts/win32
+
+    - name: Get embedded 64bit python
+      run: wget https://www.python.org/ftp/python/3.8.5/python-3.8.5-embed-amd64.zip
+      working-directory: artifacts/win64/python/default
+
+    - name: extract python
+      run: unzip python-3.8.5-embed-amd64.zip; unzip python38.zip
+      working-directory: artifacts/win64/python/default
+
+    - uses: actions/upload-artifact@v1
+      name: upload win64 artifacts with python
+      with:
+        name: Python-module-win64-python38
+        path: artifacts/win64
+    
 
