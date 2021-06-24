@@ -35,7 +35,8 @@ static initialized = 0;
 HINSTANCE hDLLInstance;
 loadPythonLibary(const char *shared_library)
 {
-    if (hDLLInstance = LoadLibrary(shared_library))
+    printf("Loading library %s\n", shared_library);
+    hDLLInstance = LoadLibrary(shared_library);
     if (hDLLInstance)
     {
         //If successfully loaded, get the address of the desired functions.
@@ -44,6 +45,9 @@ loadPythonLibary(const char *shared_library)
         PyGILState_Ensure = GetProcAddress (hDLLInstance, "PyGILState_Ensure");
         PyGILState_Release = GetProcAddress (hDLLInstance, "PyGILState_Release");
         PyRun_SimpleString = GetProcAddress (hDLLInstance, "PyRun_SimpleString");
+        Py_SetPythonHome = GetProcAddress (hDLLInstance, "Py_SetPythonHome");
+        Py_SetPath = GetProcAddress (hDLLInstance, "Py_SetPath");
+        Py_DecodeLocale = GetProcAddress (hDLLInstance, "Py_DecodeLocale");
     }
     else
     {
@@ -60,7 +64,7 @@ struct python_data {
     const char *shared_library;
     const char *context_variable;
 };
-const char * default_pythonlib = "python\\default\\python38.dll";
+const char * default_pythonlib = "python38.dll";
 const char * default_pythonpath = "pymodules\\default";
 const char * default_pythonhome = "python\\default";
 const char * default_context_variable = "context";
@@ -78,10 +82,10 @@ void python_module (void *data,
       case help_rmcios:
         return_string (context, returnv,
                        "python channel\n"
-                       "create python newname basedir | python_library_location(python/default/python3.dll | python_home(python/default)\n" 
-                       "    Create new python interperter. Optionally specify shared library location and python home\n"
+                       "create python newname | basedir | python_home(python/default) | python_library(python38.dll)\n" 
+                       "    Create new python interperter. Optionally specify channel to basedir, string to python home, and shared library name.\n"
                        "setup newname | context_variable(context) | python_path(pymodules/default/) \n"
-                       "    Context address variable name and optionally python module search path\n"
+                       "    Context address variable name and optionally python module search path to be added\n"
                        "    Variable named by context_variable parameter is added to the executed python code\n"
                        "    Passed variable enables python code capability to interact with RMCIOS system\n"
                        "    Disable context_variable by setting it to value 0\n"
@@ -95,46 +99,54 @@ void python_module (void *data,
          break;
       case create_rmcios:
         {
+            if (num_params < 1) break;
+
             self = (struct python_data *) allocate_storage (context, sizeof (struct python_data), 0);       
-
-            if (num_params < 2) break;
-
-            int base_path_channel = param_to_channel(context, paramtype, param, 1);
-            if(base_path_channel != 0) {
-                int baselen = read_str(context, base_path_channel, 0 , 0); // Read required size
-                char *basepath = allocate_storage (context, baselen+1, 0); 
-                read_str(context, base_path_channel, basepath, baselen+1); // Read required size
-                self->basepath = basepath;
-            }
-            else { 
-                int baselen = param_string_length(context, paramtype, param, 1);
-                char *basepath = allocate_storage (context, baselen+1, 0); 
-                param_to_string(context, paramtype, param, 1, baselen+1, basepath);
-                self->basepath = basepath;
-            }
-
-            char *libpath = default_pythonlib;
-            char *homepath = default_pythonhome; 
-
-            if(num_params >= 2){
-                int liblen = param_string_length(context, paramtype, param, 2);
-                char *libpath = allocate_storage (context, liblen+1, 0); 
-                param_to_string(context, paramtype, param, 2, liblen+1, libpath);
-            }
-
-            if(num_params >= 3){
-                int homelen = param_string_length(context, paramtype, param, 3);
-                char *homepath = allocate_storage (context, homelen+1, 0); 
-                param_to_string(context, paramtype, param, 3, homelen+1, homepath);
-            } 
-
-            self->shared_library = libpath;
-            self->pythonhome = homepath;
-            
-            // defaults:
             self->context_variable = default_context_variable; 
             self->pythonpath = default_pythonpath; 
-            
+            self->basepath = 0;
+            self->shared_library = default_pythonlib;
+            self->pythonhome = default_pythonhome;
+        
+            int base_path_channel = 0;
+            if (num_params > 1)
+            {
+                base_path_channel = param_to_channel(context, paramtype, param, 1);
+            }
+            else if(!getenv("PYTHONHOME"))
+            {
+                base_path_channel = channel_enum(context, "installpath");
+            }
+        
+            if(base_path_channel) 
+            {
+                if(base_path_channel != 0) {
+                    int baselen = read_str(context, base_path_channel, 0 , 0); // Read required size
+                    self->basepath = allocate_storage (context, baselen+1, 0); 
+                    if(!self->basepath) break;
+                    read_str(context, base_path_channel, self->basepath, baselen+1); // Read required size
+                }
+                else if (num_params > 1){ 
+                    int baselen = param_string_length(context, paramtype, param, 1);
+                    self->basepath = allocate_storage (context, baselen+1, 0); 
+                    if(!self->basepath) break;
+                    param_to_string(context, paramtype, param, 1, baselen+1, self->basepath);
+                }
+            }
+
+            if(num_params >= 2){
+                int homelen = param_string_length(context, paramtype, param, 2);
+                self->pythonhome = allocate_storage (context, homelen+1, 0); 
+                param_to_string(context, paramtype, param, 2, homelen+1, self->pythonhome);
+            }        
+    
+            if(num_params >= 3){
+                int liblen = param_string_length(context, paramtype, param, 3);
+                self->shared_library = allocate_storage (context, liblen+1, 0); 
+                if(!self->shared_library) break;
+                param_to_string(context, paramtype, param, 3, liblen+1, self->shared_library);
+            } 
+
             create_channel_param (context, paramtype, param, 0, 
                                   (class_rmcios) python_module, self); 
         }
@@ -151,45 +163,62 @@ void python_module (void *data,
             if(num_params >= 1){
                 int variablelen = param_string_length(context, paramtype, param, 0);
                 char *variable = allocate_storage (context, variablelen+1, 0); 
+                if(!variable) break;
                 param_to_string(context, paramtype, param, 0, variablelen+1, variable);
-                context_variable = variable;
+                self->context_variable = variable;
             }
 
             if(num_params >= 2){
                 int pythonpath_len = param_string_length(context, paramtype, param, 1);
                 char pythonpath_storage = allocate_storage (context, pythonpath_len+1, 0); 
+                if(!pythonpath_storage) break;
                 param_to_string(context, paramtype, param, 1, pythonpath_len+1, pythonpath_storage);
-                pythonpath = pythonpath_storage;
+                self->pythonpath = pythonpath_storage;
             }
-            
-            self->context_variable = context_variable; 
-            self->pythonpath = pythonpath; 
         }
         break;
       case write_rmcios:
         if(initialized == 0)
         {
-            int homelen = strlen("PYTHONHOME=") + strlen(self->basepath) + strlen(self->pythonhome);
-            char pythonhome[homelen+1];
-            int pathlen = strlen("PYTHONPATH=") + strlen(self->basepath) + strlen(self->pythonpath);
+            const wchar_t * wc_python_home = 0;
+            const wchar_t * wc_python_path = 0;
+            
+            if(self->basepath && self->pythonhome) 
+            {
+                int liblen = strlen(self->basepath) + strlen(self->pythonhome) + strlen(self->shared_library);
+                char shared_library[liblen+1];
+                strcpy(shared_library, self->basepath);
+                strcat(shared_library, self->pythonhome);
+                strcat(shared_library, self->shared_library);
+                loadPythonLibary(shared_library);
+
+                strcpy(shared_library, self->basepath);
+                strcat(shared_library, self->pythonhome);
+                wc_python_home = Py_DecodeLocale(shared_library, 0);
+            }        
+            else
+            {
+                const char* env_pythonhome = getenv("PYTHONHOME");
+                int liblen = strlen(env_pythonhome) + strlen(self->shared_library);
+                char shared_library[liblen+1];
+                strcpy(shared_library, env_pythonhome);
+                strcat(shared_library, self->shared_library);
+                loadPythonLibary(shared_library);
+            }
+
+            int pathlen = 2 * strlen(self->basepath) + strlen(self->pythonpath) + 1 + strlen(self->pythonhome);
             char pythonpath[pathlen+1];
-            int liblen = strlen(self->basepath) + strlen(self->shared_library);
-            char shared_library[liblen+1];
-        
-            strcpy(pythonhome, "PYTHONHOME=");
-            strcat(pythonhome, self->basepath);
-            strcat(pythonhome, self->pythonhome);
-            strcpy(pythonpath, "PYTHONPATH=");
-            strcat(pythonpath, self->basepath);
+            strcpy(pythonpath, self->basepath);
             strcat(pythonpath, self->pythonpath);
-            strcpy(shared_library, self->basepath);
-            strcat(shared_library, self->shared_library);
-
-            printf("Python configuration:\nlib:%s\n%s\n%s\n", shared_library, pythonpath, pythonhome);
-
-            putenv(pythonhome);
-            putenv(pythonpath);
-            loadPythonLibary(shared_library);
+            strcat(pythonpath, ";");
+            strcat(pythonpath, self->basepath);
+            strcat(pythonpath, self->pythonhome);
+            wc_python_path = Py_DecodeLocale(pythonpath, 0);
+            
+            Py_SetPath(wc_python_path);
+            if(wc_python_home) {
+                Py_SetPythonHome(wc_python_home);
+            }
             Py_Initialize();
             PyEval_InitThreads(); 
             initialized = 1;
@@ -269,7 +298,7 @@ void python_module (void *data,
 struct python_data default_python = {
         .python_version_major = 3,
         .python_version_minor = 8,
-        .shared_library = "python\\default\\python38.dll",
+        .shared_library = "python38.dll",
         .basepath="",
         .pythonpath = "pymodules\\default",
         .pythonhome = "python\\default",

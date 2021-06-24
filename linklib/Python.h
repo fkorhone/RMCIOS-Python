@@ -20,6 +20,9 @@ PyAPI_FUNC(void) (* PyEval_InitThreads)(void);
 PyAPI_FUNC(PyGILState_STATE) (* PyGILState_Ensure)(void);
 PyAPI_FUNC(void) (* PyGILState_Release)(PyGILState_STATE);
 PyAPI_FUNC(int) (* PyRun_SimpleString)(const char *s);
+PyAPI_FUNC(void) (* Py_SetPythonHome)(const wchar_t *);
+PyAPI_FUNC(void) (* Py_SetPath)(const wchar_t *);
+PyAPI_FUNC(wchar_t *) (* Py_DecodeLocale)(const char *arg,size_t *size);
 
 typedef struct _object PyObject;
 
